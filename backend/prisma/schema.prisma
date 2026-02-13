@@ -12,29 +12,46 @@ enum Role {
 }
 
 model User {
-  id            Int       @id @default(autoincrement())
-  name          String
-  email         String    @unique
-  password      String
-  role          Role      @default(USER)
-  lastLogin     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  password  String
+  role      Role      @default(USER)
+  lastLogin DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   sessions      Session[]
   auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     Int
+  sessionId  String
+  tokenHash  String    @unique
+  familyId   String
+  status     String // ACTIVE | USED | REVOKED
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Session {
-  id           String   @id @default(uuid())
-  userId       Int
-  refreshToken String   @unique
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
-  expiresAt    DateTime
+  id        String   @id @default(uuid())
+  userId    Int
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
 }
 
 model AuditLog {
