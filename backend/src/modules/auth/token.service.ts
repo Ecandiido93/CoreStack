@@ -30,9 +30,24 @@ export async function rotateRefreshToken(oldRefreshToken: string) {
 
   if (!stored) throw new Error("Invalid refresh token");
 
+  const session = await prisma.session.findUnique({
+    where: { id: stored.sessionId }
+  });
+
+  if (!session || session.expiresAt < new Date()) {
+    await revokeFamily(stored.familyId);
+    throw new Error("Session expired");
+  }
+
+ 
   if (stored.status !== "ACTIVE") {
     await revokeFamily(stored.familyId);
     throw new Error("Refresh token reuse detected");
+  }
+
+  if (stored.expiresAt < new Date()) {
+    await revokeFamily(stored.familyId);
+    throw new Error("Refresh token expired");
   }
 
   await prisma.refreshToken.update({
@@ -53,24 +68,33 @@ export async function rotateRefreshToken(oldRefreshToken: string) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + REFRESH_EXPIRES_DAYS);
 
-  await prisma.refreshToken.create({
+  const newRecord = await prisma.refreshToken.create({
     data: {
       userId: stored.userId,
       sessionId: stored.sessionId,
       tokenHash: newHash,
       familyId: stored.familyId,
       status: "ACTIVE",
-      expiresAt,
-      replacedBy: null
+      expiresAt
     }
   });
 
-  return newToken;
+  await prisma.refreshToken.update({
+    where: { id: stored.id },
+    data: { replacedBy: newRecord.id }
+  });
+
+  async function revokeFamily(familyId: string) {
+  await prisma.refreshToken.updateMany({
+    where: {
+      familyId,
+      status: "ACTIVE"
+    },
+    data: {
+      status: "REVOKED"
+    }
+  });
 }
 
-async function revokeFamily(familyId: string) {
-  await prisma.refreshToken.updateMany({
-    where: { familyId, status: "ACTIVE" },
-    data: { status: "REVOKED" }
-  });
+  return newToken;
 }

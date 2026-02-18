@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import * as authService from "./auth.service";
 import * as tokenService from "./token.service";
 import jwt from "jsonwebtoken";
+import { prisma } from "../../config/prisma";
+
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
 export async function register(req: Request, res: Response) {
@@ -55,17 +57,25 @@ res.status(400).json({ error: "Logout failed" });
 }
 
 export async function refresh(req: Request, res: Response) {
-  const { refreshToken } = req.body;
+  try {
+    const { refreshToken } = req.body;
 
-  const newRefresh = await tokenService.rotateRefreshToken(refreshToken);
+    const newRefresh = await tokenService.rotateRefreshToken(refreshToken);
 
-  const decoded = jwt.verify(newRefresh, JWT_SECRET) as any;
+    const decoded = jwt.verify(newRefresh, JWT_SECRET) as any;
 
-  const accessToken = jwt.sign(
-    { userId: decoded.userId },
-    JWT_SECRET,
-    { expiresIn: "15m" }
-  );
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId }
+    });
 
-  res.json({ accessToken, refreshToken: newRefresh });
+    const accessToken = jwt.sign(
+      { userId: user!.id, role: user!.role },
+      JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    res.json({ accessToken, refreshToken: newRefresh });
+  } catch (err: any) {
+    res.status(401).json({ error: err.message });
+  }
 }

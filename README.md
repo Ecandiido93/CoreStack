@@ -155,6 +155,119 @@ PORT=3001
 - 🚧 Active Development
 Core foundation implemented — new modules coming.
 
+## 🧪 Testing the Authentication Flow
+
+You can test the full authentication cycle using tools like **Postman**, **Insomnia**, or **cURL**.
+
+### 1. Register a new user
+
+**POST** `/auth/register`
+
+json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "123456"
+} 
+
+- 1.1 Expected response:
+
+{
+  "message": "User created",
+  "userId": 1
+}
+
+### 2. Login 
+
+**POST** `/auth/login`
+
+{
+  "email": "john@example.com",
+  "password": "123456"
+}
+
+- 2.1 Expected response:
+
+{
+  "accessToken": "...",
+  "refreshToken": "..."
+}
+
+### 3. Refresh Token (Rotation) 
+
+**POST** `/auth/refresh`
+
+{
+  "refreshToken": "YOUR_REFRESH_TOKEN"
+}
+
+- 3.1 Expected behavior:
+Generates a new access token
+
+Rotates and replaces the refresh token
+
+Detects token reuse attacks
+
+### 4. Reuse Attack Test (Security)
+
+Try calling `/auth/refresh` again using the old refresh token
+
+- 4.1 Expected response:
+
+{
+  "error": "Refresh token reuse detected"
+}
+
+### 5. Logout
+
+**POST** `auth/logout`
+
+{
+  "refreshToken": "YOUR_REFRESH_TOKEN"
+}
+
+- 5.1 Expected behavior:
+
+Revokes the entire refresh token family
+
+Prevents further refresh attempts
+
+## ✔ What is being tested
+
+Secure password hashing (bcrypt)
+
+JWT access token generation
+
+Refresh token rotation
+
+Token family revocation
+
+Reuse attack detection
+
+Session tracking
+
+Secure logout
+
+## 📌 Notes
+
+This project implements a modern secure authentication flow inspired by real-world production systems.
+
+It is designed for learning purposes, focusing on:
+
+- Secure session management
+- Refresh token rotation
+- Reuse attack detection
+- Backend authentication architecture
+
+Future improvements may include:
+
+- HTTP-only secure cookies
+- Role-based access control (RBAC)
+- Rate limiting / brute-force protection
+- Email verification / password reset
+- Production hardening
+
+
 ## 👨‍💻 Author
 
 - Emerson R. Candido
