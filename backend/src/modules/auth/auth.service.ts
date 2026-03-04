@@ -1,112 +1,113 @@
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import crypto from "crypto";
+import { RegisterDTO, LoginDTO, RefreshDTO } from "./auth.schema";
+import { hashPassword, comparePassword } from "./hash.util";
+import {
+  generateAccessToken,
+  createSession,
+  rotateRefreshToken,
+} from "./token.service";
 import { prisma } from "../../config/prisma";
-import { hashToken } from "./hash.util";
+import { UnauthorizedError, ConflictError } from "../../core/errors/HttpError";
+import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-const ACCESS_EXPIRES = "15m";
-const REFRESH_EXPIRES_DAYS = 7;
+export class AuthService {
+  async register(data: RegisterDTO) {
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
 
-function generateFamilyId() {
-  return crypto.randomUUID();
-}
-
-export async function register(name: string, email: string, password: string) {
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) throw new Error("Email already in use");
-
-  const hash = await bcrypt.hash(password, 10);
-
-  const user = await prisma.user.create({
-    data: { name, email, password: hash }
-  });
-
-  await prisma.auditLog.create({
-    data: { userId: user.id, action: "USER_REGISTER" }
-  });
-
-  return user;
-}
-
-export async function login(email: string, password: string, ip?: string, agent?: string) {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) throw new Error("Invalid credentials");
-
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) throw new Error("Invalid credentials");
-
-  const accessToken = jwt.sign(
-    { userId: user.id, role: user.role },
-    JWT_SECRET,
-    { expiresIn: ACCESS_EXPIRES }
-  );
-
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + REFRESH_EXPIRES_DAYS);
-
-  const session = await prisma.session.create({
-    data: {
-      userId: user.id,
-      ipAddress: ip,
-      userAgent: agent,
-      expiresAt
+    if (existingUser) {
+      throw new ConflictError("Email já está em uso");
     }
-  });
 
-  const familyId = generateFamilyId();
+    const hashedPassword = await hashPassword(data.password);
 
-  const refreshToken = jwt.sign(
-    {
-      userId: user.id,
-      sessionId: session.id,
-      familyId
-    },
-    JWT_SECRET,
-    { expiresIn: `${REFRESH_EXPIRES_DAYS}d` }
-  );
+    const user = await prisma.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        password: hashedPassword,
+      },
+    });
 
-  const tokenHash = hashToken(refreshToken);
+    const accessToken = generateAccessToken(user.id);
+    const refreshToken = await createSession(user.id);
 
-  await prisma.refreshToken.create({
-    data: {
-      userId: user.id,
-      sessionId: session.id,
-      tokenHash,
-      familyId,
-      status: "ACTIVE",
-      expiresAt
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  async login(data: LoginDTO) {
+    const user = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedError("Credenciais inválidas");
     }
-  });
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLogin: new Date() }
-  });
+    const passwordMatch = await comparePassword(
+      data.password,
+      user.password
+    );
 
-  await prisma.auditLog.create({
-    data: {
-      userId: user.id,
-      action: "USER_LOGIN",
-      ipAddress: ip,
-      userAgent: agent
+    if (!passwordMatch) {
+      throw new UnauthorizedError("Credenciais inválidas");
     }
-  });
 
-  return { accessToken, refreshToken };
-}
+    const accessToken = generateAccessToken(user.id);
+    const refreshToken = await createSession(user.id);
 
-export async function logout(refreshToken: string) {
-  const tokenHash = hashToken(refreshToken);
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+      accessToken,
+      refreshToken,
+    };
+  }
 
-  const stored = await prisma.refreshToken.findUnique({
-    where: { tokenHash }
-  });
+  async refresh(data: RefreshDTO) {
+    const newRefreshToken = await rotateRefreshToken(data.refreshToken);
 
-  if (!stored) return;
+    const decoded = jwt.verify(
+      newRefreshToken,
+      process.env.JWT_SECRET!
+    ) as any;
 
-  await prisma.refreshToken.updateMany({
-    where: { familyId: stored.familyId, status: "ACTIVE" },
-    data: { status: "REVOKED" }
-  });
+    const newAccessToken = generateAccessToken(decoded.userId);
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    };
+  }
+
+  async logout(refreshToken: string) {
+    try {
+      const decoded = jwt.verify(
+        refreshToken,
+        process.env.JWT_SECRET!
+      ) as any;
+
+      await prisma.refreshToken.updateMany({
+        where: {
+          familyId: decoded.familyId,
+        },
+        data: {
+          status: "REVOKED",
+        },
+      });
+    } catch {
+      throw new UnauthorizedError("Invalid refresh token");
+    }
+  }
 }

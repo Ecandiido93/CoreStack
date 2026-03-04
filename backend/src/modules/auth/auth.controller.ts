@@ -1,81 +1,56 @@
 import { Request, Response } from "express";
-import * as authService from "./auth.service";
-import * as tokenService from "./token.service";
-import jwt from "jsonwebtoken";
-import { prisma } from "../../config/prisma";
+import { AuthService } from "./auth.service";
+import { RegisterDTO, LoginDTO, RefreshDTO } from "./auth.schema";
 
-const JWT_SECRET = process.env.JWT_SECRET as string;
+const authService = new AuthService();
 
 export async function register(req: Request, res: Response) {
-try {
-const { name, email, password } = req.body;
+  try {
+    const data: RegisterDTO = req.body;
 
+    const result = await authService.register(data);
 
-const user = await authService.register(name, email, password);
-
-res.status(201).json({ message: "User created", userId: user.id });
-
-
-} catch (err: any) {
-res.status(400).json({ error: err.message });
-}
+    res.status(201).json({
+      message: "User created",
+      userId: result.user.id,
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
 }
 
 export async function login(req: Request, res: Response) {
-try {
-const { email, password } = req.body;
+  try {
+    const data: LoginDTO = req.body;
 
+    const result = await authService.login(data);
 
-const tokens = await authService.login(
-  email,
-  password,
-  req.ip,
-  req.headers["user-agent"]
-);
-
-res.json(tokens);
-
-
-} catch (err: any) {
-res.status(401).json({ error: err.message });
-}
-}
-
-export async function logout(req: Request, res: Response) {
-try {
-const { refreshToken } = req.body;
-
-
-await authService.logout(refreshToken);
-
-res.json({ message: "Logged out" });
-
-
-} catch {
-res.status(400).json({ error: "Logout failed" });
-}
+    res.json(result);
+  } catch (err: any) {
+    res.status(401).json({ error: err.message });
+  }
 }
 
 export async function refresh(req: Request, res: Response) {
   try {
-    const { refreshToken } = req.body;
+    const data: RefreshDTO = req.body;
 
-    const newRefresh = await tokenService.rotateRefreshToken(refreshToken);
+    const result = await authService.refresh(data);
 
-    const decoded = jwt.verify(newRefresh, JWT_SECRET) as any;
-
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
-    });
-
-    const accessToken = jwt.sign(
-      { userId: user!.id, role: user!.role },
-      JWT_SECRET,
-      { expiresIn: "15m" }
-    );
-
-    res.json({ accessToken, refreshToken: newRefresh });
+    res.json(result);
   } catch (err: any) {
     res.status(401).json({ error: err.message });
+  }
+}
+
+export async function logout(req: Request, res: Response) {
+  try {
+    const { refreshToken } = req.body;
+
+    await authService.logout(refreshToken);
+
+    res.json({ message: "Logged out successfully" });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
   }
 }

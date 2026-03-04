@@ -6,10 +6,15 @@ datasource db {
   provider = "postgresql"
 }
 
-
 enum Role {
   USER
   ADMIN
+}
+
+enum TokenStatus {
+  ACTIVE
+  USED
+  REVOKED
 }
 
 model User {
@@ -27,22 +32,6 @@ model User {
   refreshTokens RefreshToken[]
 }
 
-model RefreshToken {
-  id          String   @id @default(uuid())
-  userId      Int
-  sessionId   String
-  tokenHash   String   @unique
-  familyId    String
-  status      String
-  replacedBy  String?
-  consumedAt  DateTime?
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-}
-
 model Session {
   id        String   @id @default(uuid())
   userId    Int
@@ -53,6 +42,25 @@ model Session {
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id          String      @id @default(uuid())
+  userId      Int
+  sessionId   String
+  tokenHash   String      @unique
+  familyId    String
+  status      TokenStatus @default(ACTIVE)
+  replacedBy  String?
+  consumedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime    @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([sessionId])
 }
 
 model AuditLog {
