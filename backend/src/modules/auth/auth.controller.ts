@@ -54,3 +54,21 @@ export async function logout(req: Request, res: Response) {
     res.status(400).json({ error: err.message });
   }
 }
+
+export async function me(req: Request, res: Response) {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(401).json({ error: "Token não enviado" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    const user = await authService.me(token);
+
+    res.json(user);
+  } catch (err: any) {
+    res.status(401).json({ error: err.message });
+  }
+}

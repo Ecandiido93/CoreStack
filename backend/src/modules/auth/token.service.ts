@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { prisma } from "../../config/prisma";
 import { hashToken } from "./hash.util";
-import { UnauthorizedError } from "../../core/errors/HttpError";
+import { UnauthorizedError } from "../../core/errors/httpError";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const ACCESS_EXPIRES = "15m";

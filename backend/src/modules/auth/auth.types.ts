@@ -2,7 +2,7 @@ import { RegisterDTO, LoginDTO, RefreshDTO } from "./auth.schema";
 import { hashPassword, comparePassword } from "./hash.util";
 import { generateAccessToken, createSession, rotateRefreshToken } from "./token.service";
 import { prisma } from "../../config/prisma";
-import { UnauthorizedError, ConflictError } from "../../core/errors/HttpError";
+import { UnauthorizedError, ConflictError } from "../../core/errors/httpError";
 import jwt from "jsonwebtoken";
 
 export class AuthService {
