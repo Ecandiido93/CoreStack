@@ -8,9 +8,9 @@ const JWT_SECRET = process.env.JWT_SECRET!;
 const ACCESS_EXPIRES = "15m";
 const REFRESH_EXPIRES_DAYS = 7;
 
-export function generateAccessToken(userId: number) {
+export function generateAccessToken(userId: number, sessionId?: string) {
   return jwt.sign(
-    { userId },
+    { userId, sessionId },
     JWT_SECRET,
     { expiresIn: ACCESS_EXPIRES }
   );
@@ -47,7 +47,7 @@ export async function createSession(userId: number) {
     },
   });
 
-  return refreshToken;
+  return { accessToken: generateAccessToken(userId, session.id), refreshToken };
 }
 
 export async function rotateRefreshToken(oldRefreshToken: string) {

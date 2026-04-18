@@ -1,65 +1,160 @@
-import Image from "next/image";
+"use client";
+import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main style={{
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "2rem",
+      position: "relative",
+      zIndex: 1,
+    }}>
+
+      {/* Top bar */}
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0,
+        borderBottom: "1px solid var(--border)",
+        background: "rgba(8, 11, 15, 0.9)",
+        backdropFilter: "blur(8px)",
+        padding: "0.75rem 2rem",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        zIndex: 10,
+      }}>
+        <span style={{ color: "var(--green)", fontFamily: "var(--font-mono)", fontSize: "0.85rem", letterSpacing: "0.1em" }}>
+          ◈ CORESTACK
+        </span>
+        <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>
+          AUTH FOUNDATION v1.0
+        </span>
+      </div>
+
+      <div style={{ maxWidth: 680, width: "100%", textAlign: "center", animation: "fadeInUp 0.6s ease forwards" }}>
+
+        {/* Badge */}
+        <div style={{ marginBottom: "2rem", display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: "0.4rem",
+            border: "1px solid var(--border-bright)",
+            padding: "0.35rem 0.9rem",
+            fontSize: "0.75rem",
+            color: "var(--green)",
+            letterSpacing: "0.12em",
+          }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: "50%",
+              background: "var(--green)",
+              animation: "pulse-dot 1.5s ease-in-out infinite",
+              display: "inline-block",
+            }} />
+            SYSTEM ONLINE
+          </span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Title */}
+        <h1 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "clamp(3rem, 8vw, 5.5rem)",
+          fontWeight: 700,
+          lineHeight: 1,
+          letterSpacing: "0.05em",
+          marginBottom: "1.5rem",
+        }}>
+          <span style={{ color: "var(--text-primary)" }}>CORE</span>
+          <span style={{ color: "var(--green)", textShadow: "0 0 20px rgba(0,255,136,0.4)" }}>STACK</span>
+        </h1>
+
+        {/* Subtitle */}
+        <p style={{
+          color: "var(--text-secondary)",
+          fontSize: "1rem",
+          lineHeight: 1.7,
+          marginBottom: "3rem",
+          fontFamily: "var(--font-mono)",
+        }}>
+          Modular SaaS backend foundation with JWT refresh token rotation,<br />
+          session management, family-based revocation and reuse attack detection.
+        </p>
+
+        {/* Features grid */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: "1px",
+          background: "var(--border)",
+          border: "1px solid var(--border)",
+          marginBottom: "3rem",
+          textAlign: "left",
+        }}>
+          {[
+            { icon: "⟳", label: "Refresh Token Rotation", desc: "Auto-rotate on every use" },
+            { icon: "⊘", label: "Reuse Attack Detection", desc: "Family-wide revocation" },
+            { icon: "◈", label: "Session Tracking", desc: "DB-persisted sessions" },
+            { icon: "▣", label: "Audit Logging", desc: "IP + User-Agent logs" },
+          ].map((f) => (
+            <div key={f.label} style={{
+              background: "var(--bg-card)",
+              padding: "1.25rem 1.5rem",
+            }}>
+              <div style={{ color: "var(--green)", fontSize: "1.1rem", marginBottom: "0.4rem" }}>
+                {f.icon} <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.95rem", color: "var(--text-primary)", letterSpacing: "0.05em" }}>{f.label}</span>
+              </div>
+              <div style={{ color: "var(--text-muted)", fontSize: "0.78rem" }}>{f.desc}</div>
+            </div>
+          ))}
         </div>
-      </main>
-    </div>
+
+        {/* CTAs */}
+        <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
+          <Link href="/register" style={{
+            display: "inline-block",
+            background: "var(--green)",
+            color: "#080b0f",
+            padding: "0.85rem 2rem",
+            fontFamily: "var(--font-mono)",
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            letterSpacing: "0.1em",
+            textDecoration: "none",
+            transition: "all 0.2s",
+          }}
+            onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 0 20px rgba(0,255,136,0.4)")}
+            onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+          >
+            INIT_SESSION →
+          </Link>
+          <Link href="/login" style={{
+            display: "inline-block",
+            border: "1px solid var(--border-bright)",
+            color: "var(--text-secondary)",
+            padding: "0.85rem 2rem",
+            fontFamily: "var(--font-mono)",
+            fontSize: "0.85rem",
+            letterSpacing: "0.1em",
+            textDecoration: "none",
+            transition: "all 0.2s",
+          }}>
+            LOGIN →
+          </Link>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        borderTop: "1px solid var(--border)",
+        padding: "0.6rem 2rem",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        background: "rgba(8,11,15,0.9)",
+        fontSize: "0.7rem", color: "var(--text-muted)",
+      }}>
+        <span>Node.js · TypeScript · Express · Prisma · PostgreSQL</span>
+        <span>Emerson R. Candido</span>
+      </div>
+
+    </main>
   );
 }

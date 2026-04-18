@@ -1,14 +1,10 @@
 import { RegisterDTO, LoginDTO, RefreshDTO } from "./auth.schema";
 import { hashPassword, comparePassword } from "./hash.util";
-import {
-  generateAccessToken,
-  createSession,
-  rotateRefreshToken,
-} from "./token.service";
+import { createSession, rotateRefreshToken } from "./token.service";
 import { prisma } from "../../config/prisma";
 import { UnauthorizedError, ConflictError } from "../../core/errors/httpError";
 import jwt from "jsonwebtoken";
-import { hashToken } from "./hash.util"; // necessário para buscar refresh token no DB
+import { hashToken } from "./hash.util";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
@@ -36,8 +32,7 @@ export class AuthService {
       },
     });
 
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = await createSession(user.id);
+    const { accessToken, refreshToken } = await createSession(user.id);
 
     return {
       user: { id: user.id, name: user.name, email: user.email },
@@ -56,8 +51,7 @@ export class AuthService {
     const passwordMatch = await comparePassword(data.password, user.password);
     if (!passwordMatch) throw new UnauthorizedError("Credenciais inválidas");
 
-    const accessToken = generateAccessToken(user.id);
-    const refreshToken = await createSession(user.id);
+    const { accessToken, refreshToken } = await createSession(user.id);
 
     return {
       user: { id: user.id, name: user.name, email: user.email },
@@ -67,20 +61,28 @@ export class AuthService {
   }
 
   async refresh(data: RefreshDTO) {
-    // Gira o refresh token
     const newRefreshToken = await rotateRefreshToken(data.refreshToken);
 
     const decoded: any = jwt.verify(newRefreshToken, JWT_SECRET);
-    const newAccessToken = generateAccessToken(decoded.userId);
 
     // Buscar registro do refresh token no banco
     const tokenRecord = await prisma.refreshToken.findUnique({
       where: { tokenHash: hashToken(newRefreshToken) },
     });
 
+    // Access token já gerado dentro do rotateRefreshToken via createSession,
+    // mas aqui geramos com o sessionId correto do novo refresh token
+    const { accessToken: newAccessToken } = await Promise.resolve({
+      accessToken: jwt.sign(
+        { userId: decoded.userId, sessionId: decoded.sessionId },
+        JWT_SECRET,
+        { expiresIn: "15m" }
+      ),
+    });
+
     return {
       accessToken: newAccessToken,
-      accessTokenExpires: new Date(Date.now() + 15 * 60 * 1000), // 15 min do access token
+      accessTokenExpires: new Date(Date.now() + 15 * 60 * 1000),
       refreshToken: newRefreshToken,
       refreshTokenHash: tokenRecord?.tokenHash,
       refreshTokenExpires: tokenRecord?.expiresAt,

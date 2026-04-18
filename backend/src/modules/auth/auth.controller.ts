@@ -1,61 +1,50 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { AuthService } from "./auth.service";
-import { RegisterDTO, LoginDTO, RefreshDTO } from "./auth.schema";
+import { registerSchema, loginSchema, refreshSchema } from "./auth.schema";
 
 const authService = new AuthService();
 
-export async function register(req: Request, res: Response) {
+export async function register(req: Request, res: Response, next: NextFunction) {
   try {
-    const data: RegisterDTO = req.body;
-
+    const data = registerSchema.parse(req.body);
     const result = await authService.register(data);
-
-    res.status(201).json({
-      message: "User created",
-      userId: result.user.id,
-    });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    res.status(201).json({ message: "User created", userId: result.user.id });
+  } catch (err) {
+    next(err);
   }
 }
 
-export async function login(req: Request, res: Response) {
+export async function login(req: Request, res: Response, next: NextFunction) {
   try {
-    const data: LoginDTO = req.body;
-
+    const data = loginSchema.parse(req.body);
     const result = await authService.login(data);
-
     res.json(result);
-  } catch (err: any) {
-    res.status(401).json({ error: err.message });
+  } catch (err) {
+    next(err);
   }
 }
 
-export async function refresh(req: Request, res: Response) {
+export async function refresh(req: Request, res: Response, next: NextFunction) {
   try {
-    const data: RefreshDTO = req.body;
-
+    const data = refreshSchema.parse(req.body);
     const result = await authService.refresh(data);
-
     res.json(result);
-  } catch (err: any) {
-    res.status(401).json({ error: err.message });
+  } catch (err) {
+    next(err);
   }
 }
 
-export async function logout(req: Request, res: Response) {
+export async function logout(req: Request, res: Response, next: NextFunction) {
   try {
-    const { refreshToken } = req.body;
-
+    const { refreshToken } = refreshSchema.parse(req.body);
     await authService.logout(refreshToken);
-
     res.json({ message: "Logged out successfully" });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
+  } catch (err) {
+    next(err);
   }
 }
 
-export async function me(req: Request, res: Response) {
+export async function me(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
 
@@ -64,11 +53,9 @@ export async function me(req: Request, res: Response) {
     }
 
     const token = authHeader.split(" ")[1];
-
     const user = await authService.me(token);
-
     res.json(user);
-  } catch (err: any) {
-    res.status(401).json({ error: err.message });
+  } catch (err) {
+    next(err);
   }
 }
