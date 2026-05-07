@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "./auth.service";
 import { registerSchema, loginSchema, refreshSchema } from "./auth.schema";
+import { AuthenticatedRequest } from "../../core/middlewares/auth.middleware";
 
 const authService = new AuthService();
 
@@ -46,13 +47,9 @@ export async function logout(req: Request, res: Response, next: NextFunction) {
 
 export async function me(req: Request, res: Response, next: NextFunction) {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader) {
-      return res.status(401).json({ error: "Token não enviado" });
-    }
-
-    const token = authHeader.split(" ")[1];
+    // req.user já foi populado pelo authMiddleware
+    const authReq = req as AuthenticatedRequest;
+    const token = req.headers.authorization!.split(" ")[1];
     const user = await authService.me(token);
     res.json(user);
   } catch (err) {

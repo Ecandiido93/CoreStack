@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../../config/prisma";
+import { env } from "../config/env";
 
 interface TokenPayload {
   userId: number;
@@ -31,21 +32,16 @@ export const authMiddleware = async (
 
   const parts = authHeader.split(" ");
 
-  if (parts.length !== 2) {
+  if (parts.length !== 2 || !/^Bearer$/i.test(parts[0])) {
     return res.status(401).json({ message: "Token mal formatado" });
   }
 
-  const [scheme, token] = parts;
-
-  if (!/^Bearer$/i.test(scheme)) {
-    return res.status(401).json({ message: "Formato inválido" });
-  }
+  const token = parts[1];
 
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET as string
-    ) as TokenPayload;
+    const decoded = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    }) as TokenPayload;
 
     const session = await prisma.session.findUnique({
       where: { id: decoded.sessionId },
@@ -55,16 +51,14 @@ export const authMiddleware = async (
       return res.status(401).json({ message: "Sessão expirada ou inválida" });
     }
 
-    const authReq = req as AuthenticatedRequest;
-
-    authReq.user = {
+    (req as AuthenticatedRequest).user = {
       id: decoded.userId,
       role: decoded.role,
       sessionId: decoded.sessionId,
     };
 
     return next();
-  } catch (error) {
+  } catch {
     return res.status(401).json({ message: "Token inválido" });
   }
 };

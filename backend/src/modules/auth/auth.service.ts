@@ -3,39 +3,34 @@ import { hashPassword, comparePassword } from "./hash.util";
 import { createSession, rotateRefreshToken } from "./token.service";
 import { prisma } from "../../config/prisma";
 import { UnauthorizedError, ConflictError } from "../../core/errors/httpError";
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { hashToken } from "./hash.util";
-
-const JWT_SECRET = process.env.JWT_SECRET!;
-
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET não definido no .env");
-}
+import { env } from "../../core/config/env";
 
 export class AuthService {
   async register(data: RegisterDTO) {
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
+      select: { id: true },
     });
 
-    if (existingUser) {
-      throw new ConflictError("Email já está em uso");
-    }
+    if (existingUser) throw new ConflictError("Email já está em uso");
 
     const hashedPassword = await hashPassword(data.password);
+    // Transaction: garante que user + session são criados juntos ou nenhum é criado
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { name: data.name, email: data.email, password: hashedPassword },
+        select: { id: true, name: true, email: true },
+      });
 
-    const user = await prisma.user.create({
-      data: {
-        name: data.name,
-        email: data.email,
-        password: hashedPassword,
-      },
+      return user;
     });
 
-    const { accessToken, refreshToken } = await createSession(user.id);
+    const { accessToken, refreshToken } = await createSession(result.id);
 
     return {
-      user: { id: user.id, name: user.name, email: user.email },
+      user: result,
       accessToken,
       refreshToken,
     };
@@ -44,6 +39,7 @@ export class AuthService {
   async login(data: LoginDTO) {
     const user = await prisma.user.findUnique({
       where: { email: data.email },
+      select: { id: true, name: true, email: true, password: true },
     });
 
     if (!user) throw new UnauthorizedError("Credenciais inválidas");
@@ -63,22 +59,19 @@ export class AuthService {
   async refresh(data: RefreshDTO) {
     const newRefreshToken = await rotateRefreshToken(data.refreshToken);
 
-    const decoded: any = jwt.verify(newRefreshToken, JWT_SECRET);
+    const decoded: any = jwt.verify(newRefreshToken, env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
 
-    // Buscar registro do refresh token no banco
     const tokenRecord = await prisma.refreshToken.findUnique({
       where: { tokenHash: hashToken(newRefreshToken) },
     });
 
-    // Access token já gerado dentro do rotateRefreshToken via createSession,
-    // mas aqui geramos com o sessionId correto do novo refresh token
-    const { accessToken: newAccessToken } = await Promise.resolve({
-      accessToken: jwt.sign(
-        { userId: decoded.userId, sessionId: decoded.sessionId },
-        JWT_SECRET,
-        { expiresIn: "15m" }
-      ),
-    });
+    const newAccessToken = jwt.sign(
+      { userId: decoded.userId, sessionId: decoded.sessionId },
+      env.JWT_SECRET,
+      { expiresIn: env.ACCESS_TOKEN_EXPIRES as SignOptions["expiresIn"], algorithm: "HS256" }
+    );
 
     return {
       accessToken: newAccessToken,
@@ -92,7 +85,9 @@ export class AuthService {
 
   async logout(refreshToken: string) {
     try {
-      const decoded: any = jwt.verify(refreshToken, JWT_SECRET);
+      const decoded: any = jwt.verify(refreshToken, env.JWT_SECRET, {
+        algorithms: ["HS256"],
+      });
 
       await prisma.refreshToken.updateMany({
         where: { familyId: decoded.familyId },
@@ -105,7 +100,9 @@ export class AuthService {
 
   async me(token: string) {
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; exp?: number };
+      const decoded = jwt.verify(token, env.JWT_SECRET, {
+        algorithms: ["HS256"],
+      }) as { userId: number; exp?: number };
 
       const user = await prisma.user.findUnique({
         where: { id: decoded.userId },
@@ -133,7 +130,7 @@ export class AuthService {
         familyId: refreshTokenRecord?.familyId || null,
       };
     } catch {
-      throw new Error("Token inválido");
+      throw new UnauthorizedError("Token inválido");
     }
   }
 }

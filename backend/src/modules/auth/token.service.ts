@@ -1,18 +1,18 @@
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import crypto from "crypto";
 import { prisma } from "../../config/prisma";
 import { hashToken } from "./hash.util";
 import { UnauthorizedError } from "../../core/errors/httpError";
+import { env } from "../../core/config/env";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
-const ACCESS_EXPIRES = "15m";
-const REFRESH_EXPIRES_DAYS = 7;
+const ACCESS_EXPIRES = env.ACCESS_TOKEN_EXPIRES as SignOptions["expiresIn"];
+const REFRESH_EXPIRES_DAYS = parseInt(env.REFRESH_TOKEN_EXPIRES_DAYS);
 
 export function generateAccessToken(userId: number, sessionId?: string) {
   return jwt.sign(
     { userId, sessionId },
-    JWT_SECRET,
-    { expiresIn: ACCESS_EXPIRES }
+    env.JWT_SECRET,
+    { expiresIn: ACCESS_EXPIRES, algorithm: "HS256" }
   );
 }
 
@@ -20,9 +20,7 @@ export async function createSession(userId: number) {
   const session = await prisma.session.create({
     data: {
       userId,
-      expiresAt: new Date(
-        Date.now() + REFRESH_EXPIRES_DAYS * 24 * 60 * 60 * 1000
-      ),
+      expiresAt: new Date(Date.now() + REFRESH_EXPIRES_DAYS * 24 * 60 * 60 * 1000),
     },
   });
 
@@ -30,8 +28,8 @@ export async function createSession(userId: number) {
 
   const refreshToken = jwt.sign(
     { userId, sessionId: session.id, familyId },
-    JWT_SECRET,
-    { expiresIn: `${REFRESH_EXPIRES_DAYS}d` }
+    env.JWT_SECRET,
+    { expiresIn: `${REFRESH_EXPIRES_DAYS}d`, algorithm: "HS256" }
   );
 
   const tokenHash = hashToken(refreshToken);
@@ -54,24 +52,17 @@ export async function rotateRefreshToken(oldRefreshToken: string) {
   let decoded: any;
 
   try {
-    decoded = jwt.verify(oldRefreshToken, JWT_SECRET);
+    decoded = jwt.verify(oldRefreshToken, env.JWT_SECRET, { algorithms: ["HS256"] });
   } catch {
     throw new UnauthorizedError("Invalid refresh token");
   }
 
   const tokenHash = hashToken(oldRefreshToken);
+  const stored = await prisma.refreshToken.findUnique({ where: { tokenHash } });
 
-  const stored = await prisma.refreshToken.findUnique({
-    where: { tokenHash },
-  });
+  if (!stored) throw new UnauthorizedError("Invalid refresh token");
 
-  if (!stored) {
-    throw new UnauthorizedError("Invalid refresh token");
-  }
-
-  const session = await prisma.session.findUnique({
-    where: { id: stored.sessionId },
-  });
+  const session = await prisma.session.findUnique({ where: { id: stored.sessionId } });
 
   if (!session || session.expiresAt < new Date()) {
     await revokeFamily(stored.familyId);
@@ -90,20 +81,13 @@ export async function rotateRefreshToken(oldRefreshToken: string) {
 
   await prisma.refreshToken.update({
     where: { id: stored.id },
-    data: {
-      status: "USED",
-      consumedAt: new Date(),
-    },
+    data: { status: "USED", consumedAt: new Date() },
   });
 
   const newRefreshToken = jwt.sign(
-    {
-      userId: stored.userId,
-      sessionId: stored.sessionId,
-      familyId: stored.familyId,
-    },
-    JWT_SECRET,
-    { expiresIn: `${REFRESH_EXPIRES_DAYS}d` }
+    { userId: stored.userId, sessionId: stored.sessionId, familyId: stored.familyId },
+    env.JWT_SECRET,
+    { expiresIn: `${REFRESH_EXPIRES_DAYS}d`, algorithm: "HS256" }
   );
 
   const newHash = hashToken(newRefreshToken);
@@ -129,12 +113,7 @@ export async function rotateRefreshToken(oldRefreshToken: string) {
 
 async function revokeFamily(familyId: string) {
   await prisma.refreshToken.updateMany({
-    where: {
-      familyId,
-      status: "ACTIVE",
-    },
-    data: {
-      status: "REVOKED",
-    },
+    where: { familyId, status: "ACTIVE" },
+    data: { status: "REVOKED" },
   });
 }
