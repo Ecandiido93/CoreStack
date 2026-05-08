@@ -6,43 +6,48 @@ import { UnauthorizedError, ConflictError } from "../../core/errors/httpError";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { hashToken } from "./hash.util";
 import { env } from "../../core/config/env";
+import { userRepository } from "../user/user.repository";
+import { buildFingerprint } from "../../core/utils/fingerprint";
+import { Request } from "express";
 
 export class AuthService {
-  async register(data: RegisterDTO) {
-    const existingUser = await prisma.user.findUnique({
-      where: { email: data.email },
-      select: { id: true },
-    });
-
+  async register(data: RegisterDTO, tenantId: string, req: Request) {
+    const existingUser = await userRepository.findByEmail(tenantId, data.email);
     if (existingUser) throw new ConflictError("Email já está em uso");
 
     const hashedPassword = await hashPassword(data.password);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: { name: data.name, email: data.email, password: hashedPassword },
-        select: { id: true, name: true, email: true },
+    const user = await prisma.$transaction(async (tx) => {
+      return tx.user.create({
+        data: { tenantId, name: data.name, email: data.email, password: hashedPassword },
+        select: { id: true, tenantId: true, name: true, email: true, role: true },
       });
-      return user;
     });
 
-    const { accessToken, refreshToken } = await createSession(result.id);
+    const fingerprint = buildFingerprint(req);
+    const { accessToken, refreshToken } = await createSession(user.id, tenantId, req);
 
-    return { user: result, accessToken, refreshToken };
+    // Registra ou atualiza fingerprint
+    await this.upsertFingerprint(tenantId, user.id, fingerprint);
+
+    return { user, accessToken, refreshToken };
   }
 
-  async login(data: LoginDTO) {
-    const user = await prisma.user.findUnique({
-      where: { email: data.email },
-      select: { id: true, name: true, email: true, password: true },
-    });
-
+  async login(data: LoginDTO, tenantId: string, req: Request) {
+    const user = await userRepository.findByEmail(tenantId, data.email);
     if (!user) throw new UnauthorizedError("Credenciais inválidas");
 
     const passwordMatch = await comparePassword(data.password, user.password);
     if (!passwordMatch) throw new UnauthorizedError("Credenciais inválidas");
 
-    const { accessToken, refreshToken } = await createSession(user.id);
+    // Atualiza lastLoginAt
+    await userRepository.update(tenantId, user.id, { lastLoginAt: new Date() });
+
+    const fingerprint = buildFingerprint(req);
+    const { accessToken, refreshToken } = await createSession(user.id, tenantId, req);
+
+    // Registra ou atualiza fingerprint
+    await this.upsertFingerprint(tenantId, user.id, fingerprint);
 
     return {
       user: { id: user.id, name: user.name, email: user.email },
@@ -51,7 +56,6 @@ export class AuthService {
     };
   }
 
-  // Agora recebe o refreshToken direto (vindo do cookie pelo controller)
   async refresh(refreshToken: string) {
     const newRefreshToken = await rotateRefreshToken(refreshToken);
 
@@ -64,7 +68,7 @@ export class AuthService {
     });
 
     const newAccessToken = jwt.sign(
-      { userId: decoded.userId, sessionId: decoded.sessionId },
+      { userId: decoded.userId, sessionId: decoded.sessionId, tenantId: decoded.tenantId },
       env.JWT_SECRET,
       { expiresIn: env.ACCESS_TOKEN_EXPIRES as SignOptions["expiresIn"], algorithm: "HS256" }
     );
@@ -84,7 +88,6 @@ export class AuthService {
       const decoded: any = jwt.verify(refreshToken, env.JWT_SECRET, {
         algorithms: ["HS256"],
       });
-
       await prisma.refreshToken.updateMany({
         where: { familyId: decoded.familyId },
         data: { status: "REVOKED" },
@@ -98,17 +101,13 @@ export class AuthService {
     try {
       const decoded = jwt.verify(token, env.JWT_SECRET, {
         algorithms: ["HS256"],
-      }) as { userId: number; exp?: number };
+      }) as { userId: number; tenantId: string; exp?: number };
 
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        select: { id: true, name: true, email: true },
-      });
-
+      const user = await userRepository.findById(decoded.tenantId, decoded.userId);
       if (!user) throw new Error("Usuário não encontrado");
 
       const session = await prisma.session.findFirst({
-        where: { userId: user.id },
+        where: { userId: user.id, tenantId: decoded.tenantId },
         orderBy: { createdAt: "desc" },
       });
 
@@ -128,5 +127,20 @@ export class AuthService {
     } catch {
       throw new UnauthorizedError("Token inválido");
     }
+  }
+
+  private async upsertFingerprint(tenantId: string, userId: number, fp: ReturnType<typeof buildFingerprint>) {
+    await prisma.deviceFingerprint.upsert({
+      where: { tenantId_userId_fingerprintHash: { tenantId, userId, fingerprintHash: fp.hash } },
+      update: { lastSeenAt: new Date(), seenCount: { increment: 1 } },
+      create: {
+        tenantId, userId,
+        fingerprintHash: fp.hash,
+        ipAddress: fp.ipAddress,
+        userAgent: fp.userAgent,
+        acceptLanguage: fp.acceptLanguage,
+        timezone: fp.timezone,
+      },
+    });
   }
 }

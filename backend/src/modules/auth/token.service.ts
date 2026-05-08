@@ -4,22 +4,31 @@ import { prisma } from "../../config/prisma";
 import { hashToken } from "./hash.util";
 import { UnauthorizedError } from "../../core/errors/httpError";
 import { env } from "../../core/config/env";
+import { Request } from "express";
 
 const ACCESS_EXPIRES = env.ACCESS_TOKEN_EXPIRES as SignOptions["expiresIn"];
 const REFRESH_EXPIRES_DAYS = parseInt(env.REFRESH_TOKEN_EXPIRES_DAYS);
 
-export function generateAccessToken(userId: number, sessionId?: string) {
+export function generateAccessToken(userId: number, sessionId: string, tenantId: string) {
   return jwt.sign(
-    { userId, sessionId },
+    { userId, sessionId, tenantId },
     env.JWT_SECRET,
     { expiresIn: ACCESS_EXPIRES, algorithm: "HS256" }
   );
 }
 
-export async function createSession(userId: number) {
+export async function createSession(userId: number, tenantId: string, req: Request) {
+  const ipAddress =
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+    req.socket.remoteAddress || "unknown";
+  const userAgent = req.headers["user-agent"] || "unknown";
+
   const session = await prisma.session.create({
     data: {
       userId,
+      tenantId,
+      ipAddress,
+      userAgent,
       expiresAt: new Date(Date.now() + REFRESH_EXPIRES_DAYS * 24 * 60 * 60 * 1000),
     },
   });
@@ -27,7 +36,7 @@ export async function createSession(userId: number) {
   const familyId = crypto.randomUUID();
 
   const refreshToken = jwt.sign(
-    { userId, sessionId: session.id, familyId },
+    { userId, sessionId: session.id, familyId, tenantId },
     env.JWT_SECRET,
     { expiresIn: `${REFRESH_EXPIRES_DAYS}d`, algorithm: "HS256" }
   );
@@ -36,16 +45,15 @@ export async function createSession(userId: number) {
 
   await prisma.refreshToken.create({
     data: {
-      userId,
+      userId, tenantId,
       sessionId: session.id,
-      tokenHash,
-      familyId,
+      tokenHash, familyId,
       status: "ACTIVE",
       expiresAt: session.expiresAt,
     },
   });
 
-  return { accessToken: generateAccessToken(userId, session.id), refreshToken };
+  return { accessToken: generateAccessToken(userId, session.id, tenantId), refreshToken };
 }
 
 export async function rotateRefreshToken(oldRefreshToken: string) {
@@ -84,8 +92,14 @@ export async function rotateRefreshToken(oldRefreshToken: string) {
     data: { status: "USED", consumedAt: new Date() },
   });
 
+  // Atualiza lastSeenAt da sessão
+  await prisma.session.update({
+    where: { id: session.id },
+    data: { lastSeenAt: new Date() },
+  });
+
   const newRefreshToken = jwt.sign(
-    { userId: stored.userId, sessionId: stored.sessionId, familyId: stored.familyId },
+    { userId: stored.userId, sessionId: stored.sessionId, familyId: stored.familyId, tenantId: stored.tenantId },
     env.JWT_SECRET,
     { expiresIn: `${REFRESH_EXPIRES_DAYS}d`, algorithm: "HS256" }
   );
@@ -94,7 +108,7 @@ export async function rotateRefreshToken(oldRefreshToken: string) {
 
   const newRecord = await prisma.refreshToken.create({
     data: {
-      userId: stored.userId,
+      userId: stored.userId, tenantId: stored.tenantId,
       sessionId: stored.sessionId,
       tokenHash: newHash,
       familyId: stored.familyId,

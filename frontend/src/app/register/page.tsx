@@ -18,7 +18,7 @@ export default function RegisterPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Tenant-ID": process.env.NEXT_PUBLIC_TENANT_ID || "default" },
         credentials: "include", // recebe o cookie HttpOnly
         body: JSON.stringify({ name, email, password }),
       });

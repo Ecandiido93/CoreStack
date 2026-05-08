@@ -122,7 +122,7 @@ export default function Dashboard() {
 
     try {
       const decoded: any = jwtDecode(token);
-      const res = await fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": process.env.NEXT_PUBLIC_TENANT_ID || "default" } });
       const data = await res.json();
       if (!res.ok) { router.push("/login"); return; }
 
@@ -165,7 +165,7 @@ export default function Dashboard() {
     try {
       const res = await fetch(`${API}/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Tenant-ID": process.env.NEXT_PUBLIC_TENANT_ID || "default" },
         credentials: "include", // cookie HttpOnly vai automaticamente
       });
       const data = await res.json();

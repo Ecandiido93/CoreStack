@@ -17,59 +17,139 @@ enum TokenStatus {
   REVOKED
 }
 
-model User {
-  id        Int       @id @default(autoincrement())
+// ─────────────────────────────────────────
+// TENANT
+// ─────────────────────────────────────────
+model Tenant {
+  id        String   @id @default(uuid())
   name      String
-  email     String    @unique
-  password  String
-  role      Role      @default(USER)
-  lastLogin DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  users         User[]
+  sessions      Session[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+  fingerprints  DeviceFingerprint[]
+
+  @@index([slug])
+}
+
+// ─────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────
+model User {
+  id          Int       @id @default(autoincrement())
+  tenantId    String
+  name        String
+  email       String
+  password    String
+  role        Role      @default(USER)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sessions      Session[]
   auditLogs     AuditLog[]
   refreshTokens RefreshToken[]
+  fingerprints  DeviceFingerprint[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
 }
 
+// ─────────────────────────────────────────
+// SESSION
+// ─────────────────────────────────────────
 model Session {
-  id        String   @id @default(uuid())
-  userId    Int
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  id          String   @id @default(uuid())
+  tenantId    String
+  userId      Int
+  ipAddress   String?
+  userAgent   String?
+  country     String?
+  city        String?
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  lastSeenAt  DateTime @default(now())
 
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   refreshTokens RefreshToken[]
+
+  @@index([tenantId])
+  @@index([userId])
 }
 
+// ─────────────────────────────────────────
+// REFRESH TOKEN
+// ─────────────────────────────────────────
 model RefreshToken {
-  id          String      @id @default(uuid())
-  userId      Int
-  sessionId   String
-  tokenHash   String      @unique
-  familyId    String
-  status      TokenStatus @default(ACTIVE)
-  replacedBy  String?
-  consumedAt  DateTime?
-  expiresAt   DateTime
-  createdAt   DateTime    @default(now())
+  id         String      @id @default(uuid())
+  tenantId   String
+  userId     Int
+  sessionId  String
+  tokenHash  String      @unique
+  familyId   String
+  status     TokenStatus @default(ACTIVE)
+  replacedBy String?
+  consumedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime    @default(now())
 
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([familyId])
   @@index([sessionId])
+  @@index([tenantId])
 }
 
+// ─────────────────────────────────────────
+// DEVICE FINGERPRINT
+// ─────────────────────────────────────────
+model DeviceFingerprint {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  userId              Int
+  fingerprintHash     String
+  ipAddress           String?
+  userAgent           String?
+  acceptLanguage      String?
+  timezone            String?
+  externalFingerprintId String? // extensível para fingerprintjs pro ou similar
+  firstSeenAt         DateTime @default(now())
+  lastSeenAt          DateTime @default(now())
+  seenCount           Int      @default(1)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, fingerprintHash])
+  @@index([tenantId, userId])
+  @@index([fingerprintHash])
+}
+
+// ─────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────
 model AuditLog {
   id        Int      @id @default(autoincrement())
+  tenantId  String?
   userId    Int?
   action    String
   ipAddress String?
   userAgent String?
+  metadata  Json?
   createdAt DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([userId])
 }
