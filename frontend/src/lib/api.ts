@@ -1,26 +1,22 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem("refreshToken");
-  if (!refreshToken) return null;
-
   try {
+    // Cookie HttpOnly vai automaticamente — sem body, sem localStorage
     const res = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
+      credentials: "include", // envia o cookie HttpOnly
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
     });
 
     if (!res.ok) {
       localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
       window.location.href = "/login";
       return null;
     }
 
     const data = await res.json();
     localStorage.setItem("accessToken", data.accessToken);
-    localStorage.setItem("refreshToken", data.refreshToken);
     return data.accessToken;
   } catch {
     return null;
@@ -37,14 +33,22 @@ export async function api(path: string, options: RequestInit = {}): Promise<Resp
 
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  let response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include", // sempre inclui cookies nas requisições
+  });
 
-  // Se 401, tenta renovar o token automaticamente e reenviar
+  // Se 401, tenta renovar via cookie e reenviar
   if (response.status === 401) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       headers["Authorization"] = `Bearer ${newToken}`;
-      response = await fetch(`${API_URL}${path}`, { ...options, headers });
+      response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers,
+        credentials: "include",
+      });
     }
   }
 

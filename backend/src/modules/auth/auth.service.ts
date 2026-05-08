@@ -1,4 +1,4 @@
-import { RegisterDTO, LoginDTO, RefreshDTO } from "./auth.schema";
+import { RegisterDTO, LoginDTO } from "./auth.schema";
 import { hashPassword, comparePassword } from "./hash.util";
 import { createSession, rotateRefreshToken } from "./token.service";
 import { prisma } from "../../config/prisma";
@@ -17,23 +17,18 @@ export class AuthService {
     if (existingUser) throw new ConflictError("Email já está em uso");
 
     const hashedPassword = await hashPassword(data.password);
-    // Transaction: garante que user + session são criados juntos ou nenhum é criado
+
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: { name: data.name, email: data.email, password: hashedPassword },
         select: { id: true, name: true, email: true },
       });
-
       return user;
     });
 
     const { accessToken, refreshToken } = await createSession(result.id);
 
-    return {
-      user: result,
-      accessToken,
-      refreshToken,
-    };
+    return { user: result, accessToken, refreshToken };
   }
 
   async login(data: LoginDTO) {
@@ -56,8 +51,9 @@ export class AuthService {
     };
   }
 
-  async refresh(data: RefreshDTO) {
-    const newRefreshToken = await rotateRefreshToken(data.refreshToken);
+  // Agora recebe o refreshToken direto (vindo do cookie pelo controller)
+  async refresh(refreshToken: string) {
+    const newRefreshToken = await rotateRefreshToken(refreshToken);
 
     const decoded: any = jwt.verify(newRefreshToken, env.JWT_SECRET, {
       algorithms: ["HS256"],

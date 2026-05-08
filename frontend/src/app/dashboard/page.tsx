@@ -126,7 +126,6 @@ export default function Dashboard() {
       const data = await res.json();
       if (!res.ok) { router.push("/login"); return; }
 
-      const refreshToken = localStorage.getItem("refreshToken");
       const exp = decoded.exp ? new Date(decoded.exp * 1000) : null;
 
       let tokenStatus: TokenStatus = "ACTIVE";
@@ -136,7 +135,7 @@ export default function Dashboard() {
         id: data.id, name: data.name, email: data.email,
         accessToken: token,
         accessExp: exp,
-        refreshToken,
+        refreshToken: null, // HttpOnly cookie — não acessível via JS
         refreshHash: data.refreshTokenHash || null,
         refreshExp: data.refreshTokenExpires ? new Date(data.refreshTokenExpires) : null,
         familyId: data.familyId || null,
@@ -161,13 +160,13 @@ export default function Dashboard() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    const storedRefresh = localStorage.getItem("refreshToken");
+    
     const eventId = Date.now();
     try {
       const res = await fetch(`${API}/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: storedRefresh }),
+        credentials: "include", // cookie HttpOnly vai automaticamente
       });
       const data = await res.json();
 
@@ -181,8 +180,7 @@ export default function Dashboard() {
         return;
       }
 
-      localStorage.setItem("accessToken", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
+      localStorage.setItem("accessToken", data.accessToken); // accessToken no localStorage, refreshToken via HttpOnly cookie
 
       const decoded: any = jwtDecode(data.accessToken);
 
@@ -216,7 +214,7 @@ export default function Dashboard() {
   }
 
   async function handleLogout() {
-    const storedRefresh = localStorage.getItem("refreshToken");
+    
     try {
       await fetch(`${API}/auth/logout`, {
         method: "POST",
@@ -439,11 +437,12 @@ export default function Dashboard() {
         {/* Security notice */}
         <div style={{ marginTop: "1px", background: "var(--border)" }}>
           <div style={{ background: "var(--bg-card)", padding: "1rem 1.25rem", display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-            <span style={{ color: "var(--orange)", fontSize: "0.85rem", flexShrink: 0 }}>⚠</span>
+            <span style={{ color: "var(--green)", fontSize: "0.85rem", flexShrink: 0 }}>✓</span>
             <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", lineHeight: 1.6 }}>
-              <strong style={{ color: "var(--orange)", letterSpacing: "0.05em" }}>DEV MODE</strong> — tokens armazenados em localStorage para visualização.{" "}
-              Em produção, migrar para <span style={{ color: "var(--cyan)" }}>HttpOnly cookies</span> com{" "}
-              <span style={{ color: "var(--cyan)" }}>Secure + SameSite=Strict</span>.
+              <strong style={{ color: "var(--green)", letterSpacing: "0.05em" }}>SECURE MODE</strong> — refreshToken armazenado em{" "}
+              <span style={{ color: "var(--cyan)" }}>HttpOnly cookie</span> com{" "}
+              <span style={{ color: "var(--cyan)" }}>Secure + SameSite=Strict</span>.{" "}
+              Apenas o accessToken permanece em memória (localStorage).
             </div>
           </div>
         </div>

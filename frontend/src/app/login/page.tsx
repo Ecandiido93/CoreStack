@@ -18,12 +18,16 @@ export default function LoginPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // recebe o cookie HttpOnly
         body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
-      if (!res.ok) { setStatus({ type: "error", msg: data.message || data.error || "Falha na autenticação" }); return; }
+      if (!res.ok) {
+        setStatus({ type: "error", msg: data.message || data.error || "Falha na autenticação" });
+        return;
+      }
+      // Só o accessToken vai pro localStorage — refreshToken é HttpOnly cookie
       localStorage.setItem("accessToken", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
       setStatus({ type: "success", msg: "AUTH OK — redirecionando..." });
       setTimeout(() => router.push("/dashboard"), 800);
     } catch {
@@ -36,8 +40,6 @@ export default function LoginPage() {
   return (
     <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", position: "relative", zIndex: 1 }}>
       <div style={{ width: "100%", maxWidth: 420, animation: "fadeInUp 0.4s ease forwards" }}>
-
-        {/* Header */}
         <div style={{ marginBottom: "2.5rem" }}>
           <Link href="/" style={{ color: "var(--text-muted)", fontSize: "0.75rem", textDecoration: "none", letterSpacing: "0.1em", display: "inline-block", marginBottom: "1.5rem" }}>
             ← CORESTACK
@@ -53,7 +55,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Form */}
         <div style={{ border: "1px solid var(--border)", background: "var(--bg-card)", padding: "2rem" }}>
           <div style={{ borderBottom: "1px solid var(--border)", marginBottom: "1.5rem", paddingBottom: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--red)", display: "inline-block" }} />
@@ -68,7 +69,7 @@ export default function LoginPage() {
               <input type="email" placeholder="user@domain.com" value={email} onChange={e => setEmail(e.target.value)} required />
             </div>
             <div>
-              <label style={{ display: "block", color: "var(--text-muted)", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.4rem" }}>PASSWORD_HASH</label>
+              <label style={{ display: "block", color: "var(--text-muted)", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "0.4rem" }}>PASSWORD</label>
               <input type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
 

@@ -19,6 +19,7 @@ export default function RegisterPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // recebe o cookie HttpOnly
         body: JSON.stringify({ name, email, password }),
       });
       const data = await res.json();
@@ -29,8 +30,10 @@ export default function RegisterPage() {
         setStatus({ type: "error", msg: errMsg });
         return;
       }
-      setStatus({ type: "success", msg: "USER CREATED — redirecionando para login..." });
-      setTimeout(() => router.push("/login"), 1000);
+      // Só o accessToken vai pro localStorage
+      localStorage.setItem("accessToken", data.accessToken);
+      setStatus({ type: "success", msg: "USER CREATED — redirecionando..." });
+      setTimeout(() => router.push("/dashboard"), 800);
     } catch {
       setStatus({ type: "error", msg: "ERR: Não foi possível conectar ao servidor" });
     } finally {
@@ -41,7 +44,6 @@ export default function RegisterPage() {
   return (
     <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem", position: "relative", zIndex: 1 }}>
       <div style={{ width: "100%", maxWidth: 420, animation: "fadeInUp 0.4s ease forwards" }}>
-
         <div style={{ marginBottom: "2.5rem" }}>
           <Link href="/" style={{ color: "var(--text-muted)", fontSize: "0.75rem", textDecoration: "none", letterSpacing: "0.1em", display: "inline-block", marginBottom: "1.5rem" }}>
             ← CORESTACK
@@ -88,8 +90,7 @@ export default function RegisterPage() {
                 border: `1px solid ${status.type === "error" ? "var(--red)" : "var(--green)"}`,
                 background: status.type === "error" ? "rgba(255,58,92,0.08)" : "rgba(0,255,136,0.08)",
                 color: status.type === "error" ? "var(--red)" : "var(--green)",
-                fontSize: "0.78rem",
-                lineHeight: 1.6,
+                fontSize: "0.78rem", lineHeight: 1.6,
               }}>
                 {status.type === "error" ? "✗ " : "✓ "}{status.msg}
               </div>
