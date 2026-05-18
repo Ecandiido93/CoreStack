@@ -5,6 +5,7 @@ import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
+import { startCleanupJob, cleanupExpired } from "./core/services/cleanup.service";
 import { errorMiddleware } from "./core/middlewares/error.middleware";
 import { env } from "./core/config/env";
 
@@ -66,6 +67,12 @@ modules.forEach(m => {
   console.log(`📦 Module registered: ${m.name} → ${m.path}`);
 });
 
+// Endpoint admin para cleanup manual
+app.post("/admin/cleanup", async (req, res) => {
+  const result = await cleanupExpired();
+  res.json({ message: "Cleanup executed", ...result });
+});
+
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
@@ -76,6 +83,8 @@ app.get("/", (req, res) => {
 });
 
 app.use(errorMiddleware);
+
+startCleanupJob(6);
 
 const server = app.listen(env.PORT, () => {
   console.log(`🚀 CoreStack API running on port ${env.PORT} [${env.NODE_ENV}]`);

@@ -19,13 +19,8 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     const tenantId = (req as TenantRequest).tenant!.id;
     const data = registerSchema.parse(req.body);
     const result = await authService.register(data, tenantId, req);
-
     res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
-    res.status(201).json({
-      message: "User created",
-      userId: result.user.id,
-      accessToken: result.accessToken,
-    });
+    res.status(201).json({ message: "User created", userId: result.user.id, accessToken: result.accessToken });
   } catch (err) { next(err); }
 }
 
@@ -34,7 +29,6 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     const tenantId = (req as TenantRequest).tenant!.id;
     const data = loginSchema.parse(req.body);
     const result = await authService.login(data, tenantId, req);
-
     res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
     res.json({ user: result.user, accessToken: result.accessToken });
   } catch (err) { next(err); }
@@ -43,12 +37,8 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 export async function refresh(req: Request, res: Response, next: NextFunction) {
   try {
     const refreshToken = req.cookies?.refreshToken;
-    if (!refreshToken) {
-      return res.status(401).json({ error: "Refresh token não encontrado" });
-    }
-
-    const result = await authService.refresh(refreshToken);
-
+    if (!refreshToken) return res.status(401).json({ error: "Refresh token não encontrado" });
+    const result = await authService.refresh(refreshToken, req); // passa req para audit
     res.cookie("refreshToken", result.refreshToken, COOKIE_OPTIONS);
     res.json({
       accessToken: result.accessToken,
@@ -63,7 +53,7 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
 export async function logout(req: Request, res: Response, next: NextFunction) {
   try {
     const refreshToken = req.cookies?.refreshToken;
-    if (refreshToken) await authService.logout(refreshToken);
+    if (refreshToken) await authService.logout(refreshToken, req); // passa req para audit
     res.clearCookie("refreshToken", { path: "/" });
     res.json({ message: "Logged out successfully" });
   } catch (err) { next(err); }

@@ -23,7 +23,7 @@ export async function getProfile(req: AuthTenantRequest, res: Response, next: Ne
 export async function updateProfile(req: AuthTenantRequest, res: Response, next: NextFunction) {
   try {
     const data = updateProfileSchema.parse(req.body);
-    const user = await userService.updateProfile(req.tenant!.id, req.user!.id, data);
+    const user = await userService.updateProfile(req.tenant!.id, req.user!.id, data, req);
     res.json(user);
   } catch (err) { next(err); }
 }
@@ -37,8 +37,8 @@ export async function getSessions(req: AuthTenantRequest, res: Response, next: N
 
 export async function revokeSession(req: AuthTenantRequest, res: Response, next: NextFunction) {
   try {
-    await userService.revokeSession(req.tenant!.id, req.user!.id, req.params.sessionId);
-    res.json({ message: "Sessão revogada com sucesso" });
+    const result = await userService.revokeSession(req.tenant!.id, req.user!.id, req.params.sessionId, req);
+    res.json(result);
   } catch (err) { next(err); }
 }
 
@@ -54,7 +54,8 @@ export async function revokeAllUserSessions(req: AuthTenantRequest, res: Respons
     const result = await userService.revokeAllUserSessions(
       req.tenant!.id,
       parseInt(req.params.userId),
-      req.user!.role
+      req.user!.role,
+      req
     );
     res.json(result);
   } catch (err) { next(err); }

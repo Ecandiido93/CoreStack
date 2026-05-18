@@ -8,6 +8,7 @@ import { hashToken } from "./hash.util";
 import { env } from "../../core/config/env";
 import { userRepository } from "../user/user.repository";
 import { buildFingerprint } from "../../core/utils/fingerprint";
+import { audit } from "../../core/services/audit.service";
 import { Request } from "express";
 
 export class AuthService {
@@ -26,28 +27,51 @@ export class AuthService {
 
     const fingerprint = buildFingerprint(req);
     const { accessToken, refreshToken } = await createSession(user.id, tenantId, req);
-
-    // Registra ou atualiza fingerprint
     await this.upsertFingerprint(tenantId, user.id, fingerprint);
+
+    await audit({
+      action: "USER_REGISTER",
+      tenantId, userId: user.id, req,
+      metadata: { email: data.email, name: data.name },
+    });
 
     return { user, accessToken, refreshToken };
   }
 
   async login(data: LoginDTO, tenantId: string, req: Request) {
     const user = await userRepository.findByEmail(tenantId, data.email);
-    if (!user) throw new UnauthorizedError("Credenciais inválidas");
+
+    if (!user) {
+      await audit({
+        action: "USER_LOGIN_FAILED",
+        tenantId, req,
+        metadata: { email: data.email, reason: "user_not_found" },
+      });
+      throw new UnauthorizedError("Credenciais inválidas");
+    }
 
     const passwordMatch = await comparePassword(data.password, user.password);
-    if (!passwordMatch) throw new UnauthorizedError("Credenciais inválidas");
 
-    // Atualiza lastLoginAt
+    if (!passwordMatch) {
+      await audit({
+        action: "USER_LOGIN_FAILED",
+        tenantId, userId: user.id, req,
+        metadata: { email: data.email, reason: "wrong_password" },
+      });
+      throw new UnauthorizedError("Credenciais inválidas");
+    }
+
     await userRepository.update(tenantId, user.id, { lastLoginAt: new Date() });
 
     const fingerprint = buildFingerprint(req);
     const { accessToken, refreshToken } = await createSession(user.id, tenantId, req);
-
-    // Registra ou atualiza fingerprint
     await this.upsertFingerprint(tenantId, user.id, fingerprint);
+
+    await audit({
+      action: "USER_LOGIN",
+      tenantId, userId: user.id, req,
+      metadata: { email: data.email },
+    });
 
     return {
       user: { id: user.id, name: user.name, email: user.email },
@@ -56,8 +80,25 @@ export class AuthService {
     };
   }
 
-  async refresh(refreshToken: string) {
-    const newRefreshToken = await rotateRefreshToken(refreshToken);
+  async refresh(refreshToken: string, req?: Request) {
+    let newRefreshToken: string;
+
+    try {
+      newRefreshToken = await rotateRefreshToken(refreshToken);
+    } catch (err: any) {
+      // Se foi reuso detectado, loga no audit
+      if (err.message?.includes("reuse")) {
+        const decoded: any = jwt.decode(refreshToken);
+        await audit({
+          action: "TOKEN_REUSE_DETECTED",
+          tenantId: decoded?.tenantId,
+          userId: decoded?.userId,
+          req,
+          metadata: { familyId: decoded?.familyId },
+        });
+      }
+      throw err;
+    }
 
     const decoded: any = jwt.verify(newRefreshToken, env.JWT_SECRET, {
       algorithms: ["HS256"],
@@ -73,6 +114,14 @@ export class AuthService {
       { expiresIn: env.ACCESS_TOKEN_EXPIRES as SignOptions["expiresIn"], algorithm: "HS256" }
     );
 
+    await audit({
+      action: "TOKEN_REFRESHED",
+      tenantId: decoded.tenantId,
+      userId: decoded.userId,
+      req,
+      metadata: { familyId: decoded.familyId, sessionId: decoded.sessionId },
+    });
+
     return {
       accessToken: newAccessToken,
       accessTokenExpires: new Date(Date.now() + 15 * 60 * 1000),
@@ -83,14 +132,23 @@ export class AuthService {
     };
   }
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken: string, req?: Request) {
     try {
       const decoded: any = jwt.verify(refreshToken, env.JWT_SECRET, {
         algorithms: ["HS256"],
       });
+
       await prisma.refreshToken.updateMany({
         where: { familyId: decoded.familyId },
         data: { status: "REVOKED" },
+      });
+
+      await audit({
+        action: "USER_LOGOUT",
+        tenantId: decoded.tenantId,
+        userId: decoded.userId,
+        req,
+        metadata: { familyId: decoded.familyId },
       });
     } catch {
       throw new UnauthorizedError("Invalid refresh token");
