@@ -37,7 +37,9 @@ export async function getSessions(req: AuthTenantRequest, res: Response, next: N
 
 export async function revokeSession(req: AuthTenantRequest, res: Response, next: NextFunction) {
   try {
-    const result = await userService.revokeSession(req.tenant!.id, req.user!.id, req.params.sessionId, req);
+    // Cast explícito — req.params sempre é string em rotas normais
+    const sessionId = req.params.sessionId as string;
+    const result = await userService.revokeSession(req.tenant!.id, req.user!.id, sessionId, req);
     res.json(result);
   } catch (err) { next(err); }
 }
@@ -51,9 +53,10 @@ export async function getAllUsers(req: AuthTenantRequest, res: Response, next: N
 
 export async function revokeAllUserSessions(req: AuthTenantRequest, res: Response, next: NextFunction) {
   try {
+    const userId = parseInt(req.params.userId as string);
     const result = await userService.revokeAllUserSessions(
       req.tenant!.id,
-      parseInt(req.params.userId),
+      userId,
       req.user!.role,
       req
     );
