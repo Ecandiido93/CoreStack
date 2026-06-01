@@ -54,7 +54,7 @@ export class UserService {
     if (requestingUserRole !== "ADMIN") throw new ForbiddenError("Acesso restrito a administradores");
 
     const sessions = await userRepository.findActiveSessions(tenantId, targetUserId);
-    await Promise.all(sessions.map(s => userRepository.revokeSession(tenantId, targetUserId, s.id)));
+    await Promise.all(sessions.map((s: any) => userRepository.revokeSession(tenantId, targetUserId, s.id)));
 
     await audit({
       action: "SESSION_REVOKED",

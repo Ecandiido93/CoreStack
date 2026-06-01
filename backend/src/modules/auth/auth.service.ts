@@ -18,7 +18,7 @@ export class AuthService {
 
     const hashedPassword = await hashPassword(data.password);
 
-    const user = await prisma.$transaction(async (tx) => {
+    const user = await prisma.$transaction(async (tx: any) => {
       return tx.user.create({
         data: { tenantId, name: data.name, email: data.email, password: hashedPassword },
         select: { id: true, tenantId: true, name: true, email: true, role: true },

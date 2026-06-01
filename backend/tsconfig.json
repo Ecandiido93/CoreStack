@@ -4,7 +4,6 @@
     "target": "ES2020",
     "module": "CommonJS",
     "moduleResolution": "node10",
-    "ignoreDeprecations": "6.0",
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
@@ -14,5 +13,5 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "src/__tests__", "src/config/prisma.test.ts"]
 }
